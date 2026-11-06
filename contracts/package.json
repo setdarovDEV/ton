@@ -1,0 +1,28 @@
+{
+  "name": "tonnet-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Blueprint project: standard Getgems NFT contracts (TEP-62/64) + fixprice sale v3r3 + marketplace v2, deployed to TON testnet",
+  "scripts": {
+    "build": "blueprint build --all",
+    "test": "jest",
+    "deploy:marketplace": "blueprint run deployMarketplace --testnet --tonconnect",
+    "deploy:collection": "blueprint run deployCollection --testnet --tonconnect",
+    "export:code": "ts-node scripts/exportCode.ts"
+  },
+  "devDependencies": {
+    "@ton/blueprint": "^0.47.1",
+    "@ton/core": "^0.63.1",
+    "@ton/crypto": "^3.3.0",
+    "@ton/sandbox": "^0.45.0",
+    "@ton/test-utils": "^0.12.0",
+    "@ton/ton": "^16.3.0",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.10.2",
+    "jest": "^29.7.0",
+    "prettier": "^3.4.2",
+    "ts-jest": "^29.2.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  }
+}

@@ -1,0 +1,24 @@
+# Go
+/bin/
+*.test
+*.out
+coverage*.txt
+
+# Node
+node_modules/
+dist/
+contracts/build/*/
+contracts/temp/
+.blueprint*
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+deploy/secrets/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
