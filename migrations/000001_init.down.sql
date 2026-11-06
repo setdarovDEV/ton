@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS indexer_cursor;
+DROP TABLE IF EXISTS transactions;
+DROP TABLE IF EXISTS listings;
+DROP TABLE IF EXISTS nft_items;
+DROP TABLE IF EXISTS collections;
