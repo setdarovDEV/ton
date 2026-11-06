@@ -8,6 +8,8 @@ Go + PostgreSQL backend with a separate indexer, React frontend, standard Getgem
 one-command Docker Compose, CI, tests and the architecture decisions written down.
 
 > **Demo links** — Live: `https://<DOMAIN>` · Walkthrough video (3 min): `<LOOM-URL>` · Testnet collection: `<EXPLORER-URL>`
+>
+> **Status**: built in one day (Nov 6, 2026) as a technical demo. Testnet only, not audited, not for mainnet use.
 
 ---
 
