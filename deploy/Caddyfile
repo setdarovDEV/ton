@@ -1,0 +1,6 @@
+# Caddy terminates TLS (Let's Encrypt) and forwards everything to the web container,
+# whose nginx serves the SPA and proxies /api and /ws to the Go API.
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy web:80
+}

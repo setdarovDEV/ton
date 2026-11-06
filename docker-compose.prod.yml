@@ -1,0 +1,30 @@
+# Production overlay: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`
+# Adds Caddy with automatic HTTPS for $DOMAIN and removes host ports from internal services.
+services:
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+    restart: unless-stopped
+
+  web:
+    ports: !reset []
+
+  api:
+    ports: !reset []
+
+  postgres:
+    ports: !reset []
+
+volumes:
+  caddy_data:
+  caddy_config:
