@@ -7,8 +7,6 @@ A small, complete, working vertical slice of a Getgems-style, TON-first NFT mark
 Go + PostgreSQL backend with a separate indexer, React frontend, standard Getgems contracts deployed with Blueprint,
 one-command Docker Compose, CI, tests and the architecture decisions written down.
 
-> **Demo links** — Live: `https://<DOMAIN>` · Walkthrough video (3 min): `<LOOM-URL>` · Testnet collection: `<EXPLORER-URL>`
->
 > **Status**: built in one day (Nov 6, 2026) as a technical demo. Testnet only, not audited, not for mainnet use.
 
 ---
@@ -139,7 +137,7 @@ sandbox tests ([`contracts/`](contracts/README.md)).
 ```bash
 cd contracts && npm ci && npx blueprint build --all && npm test
 npm run deploy:marketplace                                  # → MARKETPLACE_ADDRESS, MARKETPLACE_PRIVATE_KEY
-METADATA_BASE_URL=https://<DOMAIN> ITEMS_COUNT=8 npm run deploy:collection   # → COLLECTIONS
+METADATA_BASE_URL=https://your-domain.com ITEMS_COUNT=8 npm run deploy:collection   # → COLLECTIONS
 ```
 
 Sales are deployed **through the marketplace contract**: the backend signs `hash(stateInit, body)` with the
