@@ -102,7 +102,8 @@ func (s *Store) ListPendingTransactions(ctx context.Context) ([]domain.Transacti
 	return txs, nil
 }
 
-// UpdateTransactionStatus implements domain.TransactionRepository and publishes tx.updated.
+// UpdateTransactionStatus implements domain.TransactionRepository: the status
+// change and the tx.updated notification are committed in one transaction.
 func (s *Store) UpdateTransactionStatus(ctx context.Context, hash string, status domain.TxStatus, lt uint64) error {
 	ctx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
@@ -118,7 +119,7 @@ func (s *Store) UpdateTransactionStatus(ctx context.Context, hash string, status
 	if err != nil {
 		return fmt.Errorf("update tx %s: %w", hash, mapErr(err))
 	}
-	ev := domain.Event{Type: "tx.updated", NFTAddress: nft, TxHash: hash, Status: string(status), At: time.Now()}
+	ev := domain.Event{Type: domain.EventTxUpdated, NFTAddress: nft, TxHash: hash, Status: string(status), At: time.Now()}
 	if listingID != nil {
 		ev.ListingID = *listingID
 	}

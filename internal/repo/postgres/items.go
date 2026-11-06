@@ -33,7 +33,7 @@ const itemWithListingSelect = `
 	SELECT i.address, i.collection_address, i.item_index, COALESCE(i.owner,''), COALESCE(i.name,''), COALESCE(i.image_url,''), i.metadata, i.updated_at,
 	       l.id, l.nft_address, l.sale_contract, l.seller, l.buyer, l.price_nano, l.status, l.created_at, l.updated_at
 	FROM nft_items i
-	LEFT JOIN listings l ON l.nft_address = i.address AND l.status IN ('pending','active')`
+	LEFT JOIN listings l ON l.nft_address = i.address AND l.status IN ` + openStatuses + ``
 
 func scanItemWithListing(row pgx.Row) (domain.ItemWithListing, error) {
 	var it domain.ItemWithListing
@@ -126,29 +126,25 @@ func (s *Store) ListItemsByCollection(ctx context.Context, collection string, so
 	return items, total, nil
 }
 
-// ListItemsByOwner implements domain.ItemRepository.
-func (s *Store) ListItemsByOwner(ctx context.Context, owner string) ([]domain.ItemWithListing, error) {
-	ctx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
-	defer cancel()
-	items, err := s.queryItems(ctx, itemWithListingSelect+` WHERE i.owner = $1 ORDER BY i.updated_at DESC`, owner)
-	if err != nil {
-		return nil, fmt.Errorf("list items by owner: %w", err)
-	}
-	return items, nil
-}
+// walletItemsWhere matches items owned by the wallet directly or held by one
+// of the wallet's open sale contracts (listed items).
+const walletItemsWhere = ` WHERE i.owner = $1
+	OR i.owner IN (SELECT sale_contract FROM listings WHERE seller = $1 AND status IN ` + openStatuses + `)`
 
-// ListItemsBySaleContracts implements domain.ItemRepository.
-func (s *Store) ListItemsBySaleContracts(ctx context.Context, contracts []string) ([]domain.ItemWithListing, error) {
-	if len(contracts) == 0 {
-		return []domain.ItemWithListing{}, nil
-	}
+// ListItemsByWallet implements domain.ItemRepository.
+func (s *Store) ListItemsByWallet(ctx context.Context, wallet string, page domain.Page) ([]domain.ItemWithListing, int, error) {
 	ctx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
-	items, err := s.queryItems(ctx, itemWithListingSelect+` WHERE i.owner = ANY($1) ORDER BY i.updated_at DESC`, contracts)
-	if err != nil {
-		return nil, fmt.Errorf("list items by sale contracts: %w", err)
+	var total int
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM nft_items i`+walletItemsWhere, wallet).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count wallet items: %w", err)
 	}
-	return items, nil
+	items, err := s.queryItems(ctx, itemWithListingSelect+walletItemsWhere+` ORDER BY i.updated_at DESC, i.address LIMIT $2 OFFSET $3`,
+		wallet, page.Size, page.Offset())
+	if err != nil {
+		return nil, 0, fmt.Errorf("list wallet items: %w", err)
+	}
+	return items, total, nil
 }
 
 // ItemOwners implements domain.ItemRepository.

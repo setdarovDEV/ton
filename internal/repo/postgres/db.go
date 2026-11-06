@@ -71,7 +71,8 @@ func pgxURL(dsn string) string {
 }
 
 // Store groups all repositories over one pool. It satisfies every domain
-// repository port plus domain.EventPublisher.
+// repository port; listing/transaction status updates emit domain.Event via
+// pg_notify in the same transaction (see events.go).
 type Store struct {
 	pool *pgxpool.Pool
 }

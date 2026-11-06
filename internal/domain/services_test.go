@@ -194,9 +194,14 @@ func TestCatalogService(t *testing.T) {
 	ctx := context.Background()
 	svc := domain.NewCatalogService(repo, repo, repo, repo)
 
-	cs, err := svc.Collections(ctx)
+	page := domain.Page{Number: 1, Size: 10}
+	cs, total, err := svc.Collections(ctx, page)
 	require.NoError(t, err)
 	assert.Len(t, cs, 1)
+	assert.Equal(t, 1, total)
+	names, err := svc.CollectionNames(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "C", names[col])
 	c, err := svc.Collection(ctx, col)
 	require.NoError(t, err)
 	assert.Equal(t, "C", c.Name)
@@ -229,7 +234,31 @@ func TestCatalogService(t *testing.T) {
 	_, _, err = svc.Listings(ctx, domain.ListingActive, domain.ListingSortNewest, domain.Page{Number: 1, Size: 10})
 	require.NoError(t, err)
 
-	items, err := svc.UserItems(ctx, seller)
+	// Seller's NFT moved to the sale contract: still visible via the open listing.
+	it, _ := repo.GetItem(ctx, nft)
+	it.Owner = "0:5a1e"
+	require.NoError(t, repo.UpsertItem(ctx, *it))
+	items, total, err := svc.UserItems(ctx, seller, page)
 	require.NoError(t, err)
-	assert.NotNil(t, items)
+	assert.Equal(t, 1, total)
+	require.Len(t, items, 1)
+	assert.Equal(t, nft, items[0].Item.Address)
+	require.NotNil(t, items[0].Listing)
+	items, total, err = svc.UserItems(ctx, seller, domain.Page{Number: 2, Size: 10})
+	require.NoError(t, err)
+	assert.Equal(t, 1, total)
+	assert.Empty(t, items)
+	_, _, err = svc.UserItems(ctx, buyer, page)
+	require.NoError(t, err)
+}
+
+func TestComputeFees(t *testing.T) {
+	fee, roy := domain.ComputeFees(10_000_000_000, 500, domain.RoyaltyParams{Numerator: 5, Denominator: 100, Address: "0:70"})
+	assert.EqualValues(t, 500_000_000, fee)
+	assert.EqualValues(t, 500_000_000, roy)
+	fee, roy = domain.ComputeFees(1_000, 0, domain.RoyaltyParams{})
+	assert.Zero(t, fee)
+	assert.Zero(t, roy, "no royalty when denominator is zero")
+	_, roy = domain.ComputeFees(1_000, 0, domain.RoyaltyParams{Numerator: 0, Denominator: 10})
+	assert.Zero(t, roy)
 }

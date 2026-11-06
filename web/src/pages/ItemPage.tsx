@@ -151,7 +151,7 @@ function TxRow({ tx }: { tx: Tx }) {
       <a href={explorerTxUrl(tx.hash)} target="_blank" rel="noreferrer" className="font-mono text-xs text-sky-300 hover:underline">
         {shortHash(tx.hash)}
       </a>
-      {tx.amount_nano && <span className="text-zinc-300">{formatTon(tx.amount_nano)} TON</span>}
+      {tx.amount_nano !== '0' && <span className="text-zinc-300">{formatTon(tx.amount_nano)} TON</span>}
       <span className="ml-auto text-xs text-zinc-500">{formatDate(tx.seen_at)}</span>
     </li>
   );

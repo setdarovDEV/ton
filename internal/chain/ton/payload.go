@@ -107,16 +107,13 @@ func (b *PayloadBuilder) friendly(a *address.Address) string {
 // until the NFT's ownership_assigned message initialises the sale.
 func (b *PayloadBuilder) saleStateInit(t domain.SaleTerms, nft *address.Address) (*cell.Cell, error) {
 	var royaltyAddr *address.Address
-	if t.Royalty.Address != "" && t.Royalty.Numerator > 0 {
-		a, err := parseStd(t.Royalty.Address)
+	royaltyNano := int64(0)
+	if t.RoyaltyAddress != "" && t.RoyaltyNano > 0 {
+		a, err := parseStd(t.RoyaltyAddress)
 		if err != nil {
 			return nil, fmt.Errorf("royalty address: %w", err)
 		}
-		royaltyAddr = a
-	}
-	royaltyNano := int64(0)
-	if royaltyAddr != nil {
-		royaltyNano = t.Royalty.Numerator
+		royaltyAddr, royaltyNano = a, t.RoyaltyNano
 	}
 	fees := cell.BeginCell().
 		MustStoreAddr(b.marketplaceFee).

@@ -5,7 +5,11 @@ import (
 	"strings"
 
 	"github.com/xssnick/tonutils-go/address"
+
+	"tonnet/internal/chain"
 )
+
+var _ chain.AddressCodec = AddressCodec{}
 
 // NormalizeRaw accepts any TON address form (raw "0:hex", user-friendly
 // base64/base64url, with any flags) and returns the canonical lowercase raw form
@@ -48,7 +52,21 @@ func parse(s string) (*address.Address, error) {
 	return a, nil
 }
 
-// mustAddr parses a raw address that is known to be valid (from storage).
+// AddressCodec implements chain.AddressCodec for TON with a fixed network flag.
+type AddressCodec struct{ testnet bool }
+
+// NewAddressCodec returns a codec rendering friendly addresses for the network.
+func NewAddressCodec(testnet bool) AddressCodec { return AddressCodec{testnet: testnet} }
+
+// Normalize implements chain.AddressCodec.
+func (AddressCodec) Normalize(s string) (string, error) { return NormalizeRaw(s) }
+
+// Friendly implements chain.AddressCodec.
+func (c AddressCodec) Friendly(raw string, bounceable bool) string {
+	return ToFriendly(raw, c.testnet, bounceable)
+}
+
+// parseStd parses a raw address that is known to be valid (from storage).
 func parseStd(raw string) (*address.Address, error) {
 	a, err := parse(raw)
 	if err != nil {

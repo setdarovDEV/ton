@@ -52,15 +52,38 @@ func (m *MemRepo) GetCollection(_ context.Context, a string) (*domain.Collection
 	}
 	return &c, nil
 }
-func (m *MemRepo) ListCollections(context.Context) ([]domain.Collection, error) {
+func (m *MemRepo) AllCollections(context.Context) ([]domain.Collection, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.sortedCollections(), nil
+}
+func (m *MemRepo) ListCollections(_ context.Context, p domain.Page) ([]domain.Collection, int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	all := m.sortedCollections()
+	lo, hi := pageBounds(p, len(all))
+	return all[lo:hi], len(all), nil
+}
+func (m *MemRepo) sortedCollections() []domain.Collection {
 	out := make([]domain.Collection, 0, len(m.Collections))
 	for _, c := range m.Collections {
 		out = append(out, c)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Address < out[j].Address })
-	return out, nil
+	return out
+}
+
+// pageBounds clamps a page onto a slice of length n.
+func pageBounds(p domain.Page, n int) (lo, hi int) {
+	lo = p.Offset()
+	if lo >= n {
+		return 0, 0
+	}
+	hi = lo + p.Size
+	if hi > n {
+		hi = n
+	}
+	return lo, hi
 }
 func (m *MemRepo) UpsertItem(_ context.Context, it domain.NFTItem) error {
 	m.mu.Lock()
@@ -102,29 +125,24 @@ func (m *MemRepo) ListItemsByCollection(_ context.Context, c string, _ domain.It
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	all := m.withListings(func(it domain.NFTItem) bool { return it.CollectionAddress == c })
-	total := len(all)
-	if p.Offset() >= total {
-		return []domain.ItemWithListing{}, total, nil
-	}
-	end := p.Offset() + p.Size
-	if end > total {
-		end = total
-	}
-	return all[p.Offset():end], total, nil
+	lo, hi := pageBounds(p, len(all))
+	return all[lo:hi], len(all), nil
 }
-func (m *MemRepo) ListItemsByOwner(_ context.Context, owner string) ([]domain.ItemWithListing, error) {
+func (m *MemRepo) ListItemsByWallet(_ context.Context, wallet string, p domain.Page) ([]domain.ItemWithListing, int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.withListings(func(it domain.NFTItem) bool { return it.Owner == owner }), nil
-}
-func (m *MemRepo) ListItemsBySaleContracts(_ context.Context, contracts []string) ([]domain.ItemWithListing, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	set := map[string]struct{}{}
-	for _, c := range contracts {
-		set[c] = struct{}{}
+	sales := map[string]struct{}{}
+	for _, l := range m.Listings {
+		if l.Seller == wallet && !l.Status.IsTerminal() {
+			sales[l.SaleContract] = struct{}{}
+		}
 	}
-	return m.withListings(func(it domain.NFTItem) bool { _, ok := set[it.Owner]; return ok }), nil
+	all := m.withListings(func(it domain.NFTItem) bool {
+		_, listed := sales[it.Owner]
+		return it.Owner == wallet || listed
+	})
+	lo, hi := pageBounds(p, len(all))
+	return all[lo:hi], len(all), nil
 }
 func (m *MemRepo) ItemOwners(_ context.Context, c string) (map[string]string, error) {
 	m.mu.Lock()
@@ -223,7 +241,7 @@ func (m *MemRepo) UpdateListingStatus(_ context.Context, id int64, st domain.Lis
 	if buyer != "" {
 		l.Buyer = buyer
 	}
-	m.Events = append(m.Events, "listing:"+string(st))
+	m.Events = append(m.Events, string(domain.EventListingUpdated)+":"+string(st))
 	return nil
 }
 func (m *MemRepo) UpsertTransaction(_ context.Context, t domain.Transaction) error {
@@ -287,7 +305,7 @@ func (m *MemRepo) UpdateTransactionStatus(_ context.Context, h string, st domain
 		t.LT = lt
 	}
 	m.Txs[h] = t
-	m.Events = append(m.Events, "tx:"+string(st))
+	m.Events = append(m.Events, string(domain.EventTxUpdated)+":"+string(st))
 	return nil
 }
 func (m *MemRepo) ConfirmPendingForNFT(_ context.Context, nft string, typ domain.TxType) ([]string, error) {
@@ -298,6 +316,7 @@ func (m *MemRepo) ConfirmPendingForNFT(_ context.Context, nft string, typ domain
 		if t.NFTAddress == nft && t.Type == typ && t.Status == domain.TxPending {
 			t.Status = domain.TxConfirmed
 			m.Txs[h] = t
+			m.Events = append(m.Events, string(domain.EventTxUpdated)+":"+string(domain.TxConfirmed))
 			out = append(out, h)
 		}
 	}

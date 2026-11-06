@@ -50,14 +50,14 @@ sequenceDiagram
     U->>NFT: transfer new_owner=sale, forward 0.05 TON
     NFT->>S: ownership_assigned(prev_owner=seller)
     S->>S: nft_owner_address = seller ⇒ initialized
-    FE->>API: POST /api/tx {boc, type:list}
+    FE->>API: POST /api/transactions {boc, type:list}
     API->>DB: INSERT transaction pending
     loop every 4 s
         IDX->>IDX: fetch items, diff owners
         IDX->>DB: nft.owner=sale ⇒ listing pending→active, tx→confirmed, pg_notify
     end
     DB-->>API: NOTIFY tx_events
-    API-->>FE: WS event (+ polling GET /api/tx/:hash)
+    API-->>FE: WS event (+ polling GET /api/transactions/:hash)
 ```
 
 ## Buy flow
@@ -82,7 +82,7 @@ sequenceDiagram
     S-->>Fee/Royalty: fee, royalty
     S->>NFT: transfer new_owner=buyer, response=buyer, mode 128 (all remaining)
     NFT-->>B: excesses (unused gas back)
-    FE->>API: POST /api/tx {boc, type:buy}
+    FE->>API: POST /api/transactions {boc, type:buy}
     IDX->>DB: nft.owner=buyer ⇒ listing active→sold, tx→confirmed
     DB-->>API: NOTIFY → WS → UI "Sold"
 ```

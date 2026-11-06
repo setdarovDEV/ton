@@ -1,7 +1,9 @@
 /**
- * API DTOs shared with the Go backend (internal/http).
+ * API DTOs mirroring the Go backend (internal/http/dto.go). Keep in sync by hand.
  * Addresses always come as both user-friendly (bounceable, testnet-flagged) and raw ("0:hex").
- * Amounts in nanoTON are serialised as decimal strings to avoid JS number precision loss.
+ * 64-bit values (nanoTON amounts, logical time `lt`) are decimal strings to avoid JS precision loss.
+ * Field naming: our API is snake_case; objects nested under `proof` and `messages[]` are TON Connect
+ * shapes passed through verbatim (camelCase).
  */
 export interface Addr {
   address: string;
@@ -41,11 +43,14 @@ export interface Listing {
   nft_address: Addr;
   sale_contract: Addr;
   seller: Addr;
+  buyer: Addr | null;
   price_nano: string;
+  /** Human-readable TON amount rendered by the backend. */
+  price_ton: string;
   status: ListingStatus;
   created_at: string;
   updated_at: string;
-  /** Present on /api/listings so Explore can render cards without extra calls. */
+  /** Present on /api/listings and /api/listings/{id} so Explore can render cards without extra calls. */
   item?: ItemSummary;
 }
 
@@ -81,25 +86,30 @@ export interface Tx {
   hash: string;
   type: TxType;
   nft_address: Addr | null;
+  listing_id: number | null;
   from: Addr | null;
   to: Addr | null;
-  amount_nano: string | null;
-  lt: number | null;
+  /** Always present; "0" when the amount is unknown (e.g. a registered, not yet indexed tx). */
+  amount_nano: string;
+  /** Logical time as a decimal string ("0" until seen on chain). */
+  lt: string;
   status: TxStatus;
+  expires_at: string | null;
   seen_at: string;
+  updated_at: string;
 }
 
-/** One TON Connect message as returned by intent endpoints. */
+/** One TON Connect message as returned by intent endpoints (state init is deployed via the marketplace). */
 export interface IntentMessage {
   address: string;
   amount: string;
   payload?: string;
-  stateInit?: string;
 }
 
 export interface Intent {
   listing_id: number;
   sale_address: Addr;
+  listing: Listing;
   valid_until: number;
   messages: IntentMessage[];
 }
@@ -110,6 +120,8 @@ export interface AuthPayload {
 
 export interface AuthToken {
   token: string;
+  /** Unix seconds. */
+  expires_at: number;
   address: Addr;
 }
 
@@ -137,8 +149,11 @@ export interface RegisterTxBody {
  * Realtime event relayed by the API from the indexer (Postgres LISTEN/NOTIFY → WebSocket).
  * Addresses here are raw ("0:hex"); the UI only uses them to invalidate caches.
  */
+/** Mirrors domain.EventType in Go. */
+export type WsEventType = 'hello' | 'listing.updated' | 'tx.updated';
+
 export interface WsEvent {
-  type: 'hello' | 'listing.updated' | 'tx.updated';
+  type: WsEventType;
   nft_address?: string;
   listing_id?: number;
   tx_hash?: string;

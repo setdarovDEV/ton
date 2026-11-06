@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"tonnet/internal/chain"
 	"tonnet/internal/chain/ton"
 	"tonnet/internal/config"
 	"tonnet/internal/repo/postgres"
@@ -34,8 +35,9 @@ func NewLogger(cfg *config.Config) *slog.Logger {
 	return l
 }
 
-// NewChainClient builds the TON client from config.
-func NewChainClient(cfg *config.Config, log *slog.Logger) *ton.Client {
+// NewChainClient builds the chain client selected by config (TON today) and
+// returns it behind the port so callers never depend on the adapter.
+func NewChainClient(cfg *config.Config, log *slog.Logger) chain.Client {
 	return ton.NewClient(ton.Config{BaseURL: cfg.TonAPIURL, APIKey: cfg.TonAPIKey, RPS: cfg.TonAPIRPS, Timeout: cfg.ChainCallTO}, log)
 }
 

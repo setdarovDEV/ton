@@ -32,13 +32,6 @@ func notify(ctx context.Context, db execer, e domain.Event) error {
 	return nil
 }
 
-// Publish implements domain.EventPublisher outside of a transaction.
-func (s *Store) Publish(ctx context.Context, e domain.Event) error {
-	ctx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
-	defer cancel()
-	return notify(ctx, s.pool, e)
-}
-
 // Listener delivers domain events published through Postgres to a handler.
 type Listener struct {
 	pool *pgxpool.Pool

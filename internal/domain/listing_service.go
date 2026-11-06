@@ -63,11 +63,7 @@ func (s *ListingService) CreateListingIntent(ctx context.Context, seller, nftAdd
 	if err != nil {
 		return nil, fmt.Errorf("read royalty params: %w", err)
 	}
-	fee := priceNano * s.cfg.FeeBPS / 10_000
-	royaltyNano := int64(0)
-	if royalty.Denominator > 0 {
-		royaltyNano = priceNano * royalty.Numerator / royalty.Denominator
-	}
+	fee, royaltyNano := ComputeFees(priceNano, s.cfg.FeeBPS, *royalty)
 	if priceNano-fee-royaltyNano < 1 {
 		return nil, fmt.Errorf("%w: price does not cover fees and royalty", ErrInvalidInput)
 	}
@@ -77,13 +73,12 @@ func (s *ListingService) CreateListingIntent(ctx context.Context, seller, nftAdd
 		Seller:             seller,
 		PriceNano:          priceNano,
 		MarketplaceFeeNano: fee,
-		Royalty:            *royalty,
+		RoyaltyNano:        royaltyNano,
 		QueryID:            uint64(s.clock.Now().Unix()), //nolint:gosec // unix seconds are positive
 	}
-	// Royalty amount travels in the fee cell; keep Royalty.Numerator as the
-	// absolute nano amount for the builder (TEP-66 share already applied).
-	terms.Royalty.Numerator = royaltyNano
-	terms.Royalty.Denominator = 1
+	if royaltyNano > 0 {
+		terms.RoyaltyAddress = royalty.Address
+	}
 
 	intent, err := s.payloads.BuildListing(terms)
 	if err != nil {

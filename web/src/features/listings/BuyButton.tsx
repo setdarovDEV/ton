@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTonConnectModal } from '@tonconnect/ui-react';
 import { api } from '@/api/endpoints';
 import type { Listing } from '@/lib/types';
-import { formatTon } from '@/lib/format';
+import { formatTon, sameRaw } from '@/lib/format';
 import { Button } from '@/components/ui';
 import { Modal } from '@/components/Modal';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -16,7 +16,7 @@ export function BuyButton({ listing, className = '' }: { listing: Listing; class
   const flow = useSendIntent();
   const [open, setOpen] = useState(false);
 
-  const isSeller = rawAddress && rawAddress.toLowerCase() === listing.seller.raw.toLowerCase();
+  const isSeller = sameRaw(rawAddress, listing.seller.raw);
   if (listing.status !== 'active' || isSeller) return null;
 
   const start = async () => {

@@ -132,7 +132,7 @@ func (s *Service) trackedCollections(ctx context.Context) ([]string, error) {
 	for _, c := range s.cfg.Collections {
 		add(c)
 	}
-	stored, err := s.repo.ListCollections(ctx)
+	stored, err := s.repo.AllCollections(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list stored collections: %w", err)
 	}
@@ -366,7 +366,7 @@ func (s *Service) scanItemTxs(ctx context.Context, item string) error {
 				to = out.Destination
 			}
 		}
-		typ := s.classifyTransfer(ctx, item, tx.InMsg.Source, to)
+		typ := s.classifyTransfer(ctx, tx.InMsg.Source, to)
 		rec := domain.Transaction{Hash: tx.Hash, Type: typ, NFTAddress: item, From: tx.InMsg.Source, To: to,
 			AmountNano: tx.InMsg.ValueNano, LT: tx.LT, Status: domain.TxConfirmed, SeenAt: time.Unix(tx.Time, 0)}
 		if err := s.repo.UpsertTransaction(ctx, rec); err != nil {
@@ -378,7 +378,7 @@ func (s *Service) scanItemTxs(ctx context.Context, item string) error {
 
 // classifyTransfer labels an on-chain transfer by who sent it and where the
 // NFT went, using the listing that involves either party.
-func (s *Service) classifyTransfer(ctx context.Context, item, from, to string) domain.TxType {
+func (s *Service) classifyTransfer(ctx context.Context, from, to string) domain.TxType {
 	for _, candidate := range []string{to, from} {
 		if candidate == "" {
 			continue
@@ -396,7 +396,6 @@ func (s *Service) classifyTransfer(ctx context.Context, item, from, to string) d
 			return domain.TxBuy
 		}
 	}
-	_ = item
 	return domain.TxTransfer
 }
 

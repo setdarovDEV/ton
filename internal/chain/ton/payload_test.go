@@ -66,7 +66,8 @@ func TestBuildListing(t *testing.T) {
 		Seller:             testSeller,
 		PriceNano:          5_000_000_000,
 		MarketplaceFeeNano: 250_000_000,
-		Royalty:            domain.RoyaltyParams{Numerator: 100_000_000, Denominator: 1, Address: testRoyal},
+		RoyaltyNano:        100_000_000,
+		RoyaltyAddress:     testRoyal,
 		QueryID:            42,
 	}
 	intent, err := b.BuildListing(terms)

@@ -35,13 +35,13 @@ export function useLiveUpdates(): void {
           return;
         }
         if (event.type === 'tx.updated') {
-          if (event.tx_hash) void qc.invalidateQueries({ queryKey: keys.tx(event.tx_hash) });
+          if (event.tx_hash) void qc.invalidateQueries({ queryKey: keys.transaction(event.tx_hash) });
           if (event.nft_address) void qc.invalidateQueries({ queryKey: keys.item(event.nft_address) });
         } else if (event.type === 'listing.updated') {
-          void qc.invalidateQueries({ queryKey: ['listings'] });
+          void qc.invalidateQueries({ queryKey: keys.listingsRoot });
           if (event.nft_address) void qc.invalidateQueries({ queryKey: keys.item(event.nft_address) });
-          void qc.invalidateQueries({ queryKey: ['users'] });
-          void qc.invalidateQueries({ queryKey: ['collections'] });
+          void qc.invalidateQueries({ queryKey: keys.usersRoot });
+          void qc.invalidateQueries({ queryKey: keys.collectionsRoot });
         }
       };
       socket.onclose = () => schedule();

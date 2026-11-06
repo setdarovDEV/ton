@@ -11,7 +11,7 @@ separate processes, so the API cannot observe confirmations in memory.
   tonapi has no reliable push for arbitrary accounts and polling is trivially idempotent.
 - Indexer → API: on every status change the indexer runs `pg_notify('tx_events', json)`.
   The API `LISTEN`s on the same channel and fans events out to `/ws` clients.
-- Frontend: TanStack Query polls `GET /api/tx/:hash` every 3 s **and** invalidates on WS events.
+- Frontend: TanStack Query polls `GET /api/transactions/:hash` every 3 s **and** invalidates on WS events.
   Polling is the correctness path; WS is latency sugar.
 
 ## Alternatives

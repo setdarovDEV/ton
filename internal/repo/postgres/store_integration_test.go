@@ -57,9 +57,17 @@ func TestIntegrationStore(t *testing.T) {
 	assert.Equal(t, "Demo v2", c.Name)
 	assert.EqualValues(t, 3, c.NextItemIndex)
 	assert.JSONEq(t, "{}", string(c.Metadata))
-	cs, err := s.ListCollections(ctx)
+	cs, ctotal, err := s.ListCollections(ctx, domain.Page{Number: 1, Size: 10})
 	require.NoError(t, err)
 	assert.Len(t, cs, 1)
+	assert.Equal(t, 1, ctotal)
+	cs, ctotal, err = s.ListCollections(ctx, domain.Page{Number: 2, Size: 10})
+	require.NoError(t, err)
+	assert.Empty(t, cs)
+	assert.Equal(t, 1, ctotal)
+	allCs, err := s.AllCollections(ctx)
+	require.NoError(t, err)
+	assert.Len(t, allCs, 1)
 	_, err = s.GetCollection(ctx, "0:zz")
 	assert.ErrorIs(t, err, domain.ErrNotFound)
 
@@ -116,16 +124,19 @@ func TestIntegrationStore(t *testing.T) {
 
 	// Item moved to sale contract: My NFTs still finds it through the listing.
 	require.NoError(t, s.UpsertItem(ctx, domain.NFTItem{Address: item0, CollectionAddress: col, Index: 0, Owner: sale, Name: "Zero"}))
-	owned, err := s.ListItemsByOwner(ctx, seller)
+	mineItems, mineTotal, err := s.ListItemsByWallet(ctx, seller, domain.Page{Number: 1, Size: 10})
 	require.NoError(t, err)
-	assert.Empty(t, owned)
-	listed, err := s.ListItemsBySaleContracts(ctx, []string{sale})
+	assert.Equal(t, 1, mineTotal)
+	require.Len(t, mineItems, 1)
+	assert.Equal(t, item0, mineItems[0].Item.Address)
+	require.NotNil(t, mineItems[0].Listing)
+	buyerItems, buyerTotal, err := s.ListItemsByWallet(ctx, buyer, domain.Page{Number: 1, Size: 10})
 	require.NoError(t, err)
-	require.Len(t, listed, 1)
-	assert.Equal(t, item0, listed[0].Item.Address)
-	none, err := s.ListItemsBySaleContracts(ctx, nil)
+	assert.Equal(t, 1, buyerTotal)
+	assert.Equal(t, item1, buyerItems[0].Item.Address)
+	_, pagedTotal, err := s.ListItemsByWallet(ctx, buyer, domain.Page{Number: 2, Size: 10})
 	require.NoError(t, err)
-	assert.Empty(t, none)
+	assert.Equal(t, 1, pagedTotal)
 
 	// Transactions
 	exp := time.Now().Add(time.Hour)
@@ -192,20 +203,24 @@ func TestIntegrationEventsRoundTrip(t *testing.T) {
 	l, err := s.CreateListing(ctx, domain.Listing{NFTAddress: item0, SaleContract: sale, Seller: seller, PriceNano: 1, Status: domain.ListingPending})
 	require.NoError(t, err)
 	require.NoError(t, s.UpdateListingStatus(ctx, l.ID, domain.ListingActive, ""))
-	require.NoError(t, s.Publish(ctx, domain.Event{Type: "custom", Status: "x", At: time.Now()}))
+	require.NoError(t, s.UpsertTransaction(ctx, domain.Transaction{Hash: "h1", Type: domain.TxList, NFTAddress: item0, ListingID: &l.ID, Status: domain.TxPending}))
+	require.NoError(t, s.UpdateTransactionStatus(ctx, "h1", domain.TxConfirmed, 5))
 
 	select {
 	case e := <-events:
-		assert.Equal(t, "listing.updated", e.Type)
+		assert.Equal(t, domain.EventListingUpdated, e.Type)
 		assert.Equal(t, l.ID, e.ListingID)
 		assert.Equal(t, "active", e.Status)
 	case <-ctx.Done():
-		t.Fatal("no event received")
+		t.Fatal("no listing event received")
 	}
 	select {
 	case e := <-events:
-		assert.Equal(t, "custom", e.Type)
+		assert.Equal(t, domain.EventTxUpdated, e.Type)
+		assert.Equal(t, "h1", e.TxHash)
+		assert.Equal(t, l.ID, e.ListingID)
+		assert.Equal(t, "confirmed", e.Status)
 	case <-ctx.Done():
-		t.Fatal("no custom event received")
+		t.Fatal("no tx event received")
 	}
 }

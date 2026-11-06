@@ -18,7 +18,8 @@ contracts/temp/
 *.pem
 deploy/secrets/
 
-# OS / IDE
+# OS / IDE / agent scratch
+.claude/
 .DS_Store
 .idea/
 .vscode/

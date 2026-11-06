@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/cors"
 
 	"tonnet/internal/auth"
+	"tonnet/internal/chain"
 	"tonnet/internal/domain"
 )
 
@@ -24,17 +25,21 @@ type Deps struct {
 	Proofs   *auth.Verifier
 	Tokens   *auth.TokenIssuer
 	Hub      *Hub
-	Testnet  bool
-	Origins  []string
-	Log      *slog.Logger
-	Health   func() error
+	// Addrs normalises inbound addresses and renders outbound ones.
+	Addrs chain.AddressCodec
+	// Network is the chain network name ("testnet" | "mainnet") the API serves;
+	// ton_proof requests for another network are rejected.
+	Network string
+	Origins []string
+	Log     *slog.Logger
+	Health  func() error
 }
 
 // Server is the HTTP handler tree.
 type Server struct {
-	deps Deps
-	fmt  addrFormatter
-	mux  *chi.Mux
+	deps   Deps
+	render addrFormatter
+	mux    *chi.Mux
 }
 
 // NewServer builds the router.
@@ -42,7 +47,7 @@ func NewServer(d Deps) *Server {
 	if d.Log == nil {
 		d.Log = slog.Default()
 	}
-	s := &Server{deps: d, fmt: addrFormatter{testnet: d.Testnet}}
+	s := &Server{deps: d, render: addrFormatter{codec: d.Addrs}}
 	s.mux = s.routes()
 	return s
 }
@@ -80,7 +85,7 @@ func (s *Server) routes() *chi.Mux {
 		r.Get("/users/{addr}/items", s.listUserItems)
 		r.Get("/listings", s.listListings)
 		r.Get("/listings/{id}", s.getListing)
-		r.Get("/tx/{hash}", s.getTx)
+		r.Get("/transactions/{hash}", s.getTx)
 
 		r.Group(func(r chi.Router) {
 			r.Use(auth.Middleware(s.deps.Tokens, writeError))
@@ -88,7 +93,7 @@ func (s *Server) routes() *chi.Mux {
 			r.Post("/listings/intent", s.listingIntent)
 			r.Post("/listings/{id}/buy-intent", s.buyIntent)
 			r.Post("/listings/{id}/cancel-intent", s.cancelIntent)
-			r.Post("/tx", s.registerTx)
+			r.Post("/transactions", s.registerTx)
 		})
 	})
 	return r

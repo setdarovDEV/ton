@@ -2,8 +2,12 @@ import { useQuery } from '@tanstack/react-query';
 import { api, type ItemSort } from '@/api/endpoints';
 import { keys } from '@/api/queryKeys';
 
-export function useCollections(page = 1, limit = 24) {
-  return useQuery({ queryKey: [...keys.collections, { page, limit }], queryFn: () => api.collections.list(page, limit) });
+export function useCollections(params: { page: number; limit: number }) {
+  return useQuery({
+    queryKey: keys.collectionsList(params),
+    queryFn: () => api.collections.list(params),
+    placeholderData: (prev) => prev,
+  });
 }
 
 export function useCollection(addr: string) {

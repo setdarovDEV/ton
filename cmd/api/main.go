@@ -16,6 +16,7 @@ import (
 
 	"tonnet/internal/app"
 	"tonnet/internal/auth"
+	"tonnet/internal/chain"
 	"tonnet/internal/chain/ton"
 	"tonnet/internal/config"
 	"tonnet/internal/domain"
@@ -73,7 +74,8 @@ func run() error {
 		Proofs:   auth.NewVerifier(payloadIssuer, chainClient, cfg.TonProofDomains, 15*time.Minute),
 		Tokens:   auth.NewTokenIssuer(secret, cfg.JWTTTL),
 		Hub:      hub,
-		Testnet:  cfg.IsTestnet(),
+		Addrs:    ton.NewAddressCodec(cfg.IsTestnet()),
+		Network:  cfg.TONNetwork,
 		Origins:  cfg.CORSOrigins,
 		Log:      log,
 		Health: func() error {
@@ -113,7 +115,7 @@ func run() error {
 }
 
 // royaltyAdapter maps chain.RoyaltyParams onto the domain port.
-type royaltyAdapter struct{ c *ton.Client }
+type royaltyAdapter struct{ c chain.Client }
 
 func (a royaltyAdapter) GetRoyaltyParams(ctx context.Context, collection string) (*domain.RoyaltyParams, error) {
 	r, err := a.c.GetRoyaltyParams(ctx, collection)

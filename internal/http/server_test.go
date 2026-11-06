@@ -19,6 +19,7 @@ import (
 	"github.com/xssnick/tonutils-go/tvm/cell"
 
 	"tonnet/internal/auth"
+	"tonnet/internal/chain/ton"
 	"tonnet/internal/domain"
 	"tonnet/internal/domain/domaintest"
 )
@@ -85,7 +86,8 @@ func newEnv(t *testing.T) *env {
 		Proofs:   auth.NewVerifier(payloads, nil, []string{"localhost"}, time.Minute),
 		Tokens:   tokens,
 		Hub:      hub,
-		Testnet:  true,
+		Addrs:    ton.NewAddressCodec(true),
+		Network:  "testnet",
 		Origins:  []string{"*"},
 		Log:      slog.Default(),
 	})
@@ -139,7 +141,7 @@ func TestHealthAndCatalog(t *testing.T) {
 	assert.Equal(t, "Demo", col["name"])
 
 	// Friendly address in the path is accepted and normalised.
-	resp, body = e.do(t, http.MethodGet, "/api/collections/"+addr["address"].(string)+"/items?sort=price&page=1&limit=10", nil, "")
+	resp, body = e.do(t, http.MethodGet, "/api/collections/"+addr["address"].(string)+"/items?sort=price_asc&page=1&limit=10", nil, "")
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.EqualValues(t, 1, body["total"])
 	assert.EqualValues(t, 10, body["limit"])
@@ -147,6 +149,11 @@ func TestHealthAndCatalog(t *testing.T) {
 	// Percent-encoded raw form (what encodeURIComponent produces) is accepted too.
 	resp, _ = e.do(t, http.MethodGet, "/api/collections/"+strings.ReplaceAll(colRaw, ":", "%3A")+"/items", nil, "")
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	resp, _ = e.do(t, http.MethodGet, "/api/collections/"+colRaw+"/items?sort=price_dsc", nil, "")
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "unknown sort is rejected")
+	resp, _ = e.do(t, http.MethodGet, "/api/listings?sort=nope", nil, "")
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "unknown listing sort is rejected")
 
 	resp, _ = e.do(t, http.MethodGet, "/api/collections/not-an-address/items", nil, "")
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -176,9 +183,9 @@ func TestHealthAndCatalog(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	resp, _ = e.do(t, http.MethodGet, "/api/listings/5", nil, "")
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
-	resp, _ = e.do(t, http.MethodGet, "/api/tx/short", nil, "")
+	resp, _ = e.do(t, http.MethodGet, "/api/transactions/short", nil, "")
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-	resp, _ = e.do(t, http.MethodGet, "/api/tx/"+strings.Repeat("a", 64), nil, "")
+	resp, _ = e.do(t, http.MethodGet, "/api/transactions/"+strings.Repeat("a", 64), nil, "")
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
@@ -236,22 +243,22 @@ func TestListingFlowOverHTTP(t *testing.T) {
 
 	// Register the wallet's signed external message.
 	boc := base64.StdEncoding.EncodeToString(cell.BeginCell().MustStoreUInt(1, 8).EndCell().ToBOC())
-	resp, body = e.do(t, http.MethodPost, "/api/tx", map[string]any{"boc": boc, "type": "list", "listing_id": id}, seller)
+	resp, body = e.do(t, http.MethodPost, "/api/transactions", map[string]any{"boc": boc, "type": "list", "listing_id": id}, seller)
 	require.Equal(t, http.StatusAccepted, resp.StatusCode)
 	hash := body["hash"].(string)
 	assert.Len(t, hash, 64)
 	assert.Equal(t, "pending", body["status"])
 	assert.Equal(t, nftRaw, body["nft_address"].(map[string]any)["raw"])
 
-	resp, body = e.do(t, http.MethodGet, "/api/tx/"+hash, nil, "")
+	resp, body = e.do(t, http.MethodGet, "/api/transactions/"+hash, nil, "")
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "list", body["type"])
 
-	resp, _ = e.do(t, http.MethodPost, "/api/tx", map[string]any{"boc": "!!", "type": "list", "listing_id": id}, seller)
+	resp, _ = e.do(t, http.MethodPost, "/api/transactions", map[string]any{"boc": "!!", "type": "list", "listing_id": id}, seller)
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-	resp, _ = e.do(t, http.MethodPost, "/api/tx", map[string]any{"boc": boc, "type": "list", "nft_address": "bad"}, seller)
+	resp, _ = e.do(t, http.MethodPost, "/api/transactions", map[string]any{"boc": boc, "type": "list", "nft_address": "bad"}, seller)
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-	resp, _ = e.do(t, http.MethodPost, "/api/tx", "not json", seller)
+	resp, _ = e.do(t, http.MethodPost, "/api/transactions", "not json", seller)
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
 	// Buy is refused until the indexer activates the listing.
@@ -298,12 +305,12 @@ func TestWebSocketBroadcast(t *testing.T) {
 	assert.Contains(t, string(hello), "hello")
 	require.Eventually(t, func() bool { return e.hub.ClientCount() == 1 }, time.Second, 10*time.Millisecond)
 
-	e.hub.Broadcast(domain.Event{Type: "tx.updated", TxHash: "abc", Status: "confirmed", At: time.Now()})
+	e.hub.Broadcast(domain.Event{Type: domain.EventTxUpdated, TxHash: "abc", Status: "confirmed", At: time.Now()})
 	_, msg, err := c.Read(ctx)
 	require.NoError(t, err)
 	var ev domain.Event
 	require.NoError(t, json.Unmarshal(msg, &ev))
-	assert.Equal(t, "tx.updated", ev.Type)
+	assert.Equal(t, domain.EventTxUpdated, ev.Type)
 	assert.Equal(t, "confirmed", ev.Status)
 
 	resp, body := e.do(t, http.MethodGet, "/healthz", nil, "")

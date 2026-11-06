@@ -85,9 +85,9 @@ deploys only from its `marketplace_address`. Item metadata (TEP-64 off-chain) is
 | `POST` | `/api/listings/intent` | JWT | `{nft_address, price_nano}` → sale address + 2 wallet messages; writes `pending` listing |
 | `POST` | `/api/listings/{id}/buy-intent` | JWT | → 1 wallet message (`price + 0.15 TON`, `op=2`, `query_id=listing id`) |
 | `POST` | `/api/listings/{id}/cancel-intent` | JWT (seller) | → 1 wallet message (`op=3`) |
-| `POST` | `/api/tx` | JWT | `{boc, type, nft_address, listing_id}` → registers pending tx, returns its hash |
+| `POST` | `/api/transactions` | JWT | `{boc, type, nft_address, listing_id}` → registers pending tx, returns its hash |
 | `WS` | `/ws` | — | `listing.updated` / `tx.updated` events relayed from the indexer via Postgres `LISTEN/NOTIFY` |
-| `GET` | `/api/tx/{hash}` | — | `pending \| confirmed \| failed` (polling) |
+| `GET` | `/api/transactions/{hash}` | — | `pending \| confirmed \| failed` (polling) |
 
 Addresses are accepted in raw (`0:hex`) or user-friendly form and returned as both `raw` and `address`
 (user-friendly, bounceable, testnet flag). Errors: `{"error":{"code":"…","message":"…"}}`.

@@ -21,13 +21,27 @@ func NewCatalogService(c CollectionRepository, i ItemRepository, l ListingReposi
 	return &CatalogService{collections: c, items: i, listings: l, txs: t}
 }
 
-// Collections lists indexed collections.
-func (s *CatalogService) Collections(ctx context.Context) ([]Collection, error) {
-	cs, err := s.collections.ListCollections(ctx)
+// Collections pages indexed collections.
+func (s *CatalogService) Collections(ctx context.Context, page Page) ([]Collection, int, error) {
+	cs, total, err := s.collections.ListCollections(ctx, page)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list collections: %w", err)
+	}
+	return cs, total, nil
+}
+
+// CollectionNames maps every tracked collection address to its display name
+// (for embedding into item read models).
+func (s *CatalogService) CollectionNames(ctx context.Context) (map[string]string, error) {
+	cs, err := s.collections.AllCollections(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list collections: %w", err)
 	}
-	return cs, nil
+	out := make(map[string]string, len(cs))
+	for _, c := range cs {
+		out[c.Address] = c.Name
+	}
+	return out, nil
 }
 
 // Collection returns one collection.
@@ -75,38 +89,14 @@ func (s *CatalogService) Item(ctx context.Context, address string) (*ItemDetail,
 	return &ItemDetail{Item: *item, Listing: listing, History: history}, nil
 }
 
-// UserItems returns the NFTs a wallet owns directly plus the ones it has put
+// UserItems pages the NFTs a wallet owns directly plus the ones it has put
 // on sale (owned by its sale contracts).
-func (s *CatalogService) UserItems(ctx context.Context, owner string) ([]ItemWithListing, error) {
-	owned, err := s.items.ListItemsByOwner(ctx, owner)
+func (s *CatalogService) UserItems(ctx context.Context, owner string, page Page) ([]ItemWithListing, int, error) {
+	items, total, err := s.items.ListItemsByWallet(ctx, owner, page)
 	if err != nil {
-		return nil, fmt.Errorf("list owned items: %w", err)
+		return nil, 0, fmt.Errorf("list wallet items: %w", err)
 	}
-	open, err := s.listings.ListOpenListingsBySeller(ctx, owner)
-	if err != nil {
-		return nil, fmt.Errorf("list seller listings: %w", err)
-	}
-	if len(open) == 0 {
-		return owned, nil
-	}
-	contracts := make([]string, 0, len(open))
-	for _, l := range open {
-		contracts = append(contracts, l.SaleContract)
-	}
-	listed, err := s.items.ListItemsBySaleContracts(ctx, contracts)
-	if err != nil {
-		return nil, fmt.Errorf("list listed items: %w", err)
-	}
-	seen := make(map[string]struct{}, len(owned))
-	for _, it := range owned {
-		seen[it.Item.Address] = struct{}{}
-	}
-	for _, it := range listed {
-		if _, ok := seen[it.Item.Address]; !ok {
-			owned = append(owned, it)
-		}
-	}
-	return owned, nil
+	return items, total, nil
 }
 
 // Listings pages listings by status.

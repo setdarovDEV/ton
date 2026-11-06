@@ -23,7 +23,7 @@ export const api = {
     verify: (body: TonProofBody) => request<AuthToken>('/api/auth/verify', { method: 'POST', body }),
   },
   collections: {
-    list: (page = 1, limit = 24) => request<Page<Collection>>(`/api/collections${qs({ page, limit })}`),
+    list: (params: { page?: number; limit?: number } = {}) => request<Page<Collection>>(`/api/collections${qs(params)}`),
     get: (addr: string) => request<Collection>(`/api/collections/${encodeURIComponent(addr)}`),
     items: (addr: string, params: { page?: number; limit?: number; sort?: ItemSort }) =>
       request<Page<Item>>(`/api/collections/${encodeURIComponent(addr)}/items${qs(params)}`),
@@ -44,8 +44,8 @@ export const api = {
     cancelIntent: (id: number) =>
       request<Intent>(`/api/listings/${id}/cancel-intent`, { method: 'POST', auth: true }),
   },
-  tx: {
-    register: (body: RegisterTxBody) => request<Tx>('/api/tx', { method: 'POST', body, auth: true }),
-    get: (hash: string) => request<Tx>(`/api/tx/${encodeURIComponent(hash)}`),
+  transactions: {
+    register: (body: RegisterTxBody) => request<Tx>('/api/transactions', { method: 'POST', body, auth: true }),
+    get: (hash: string) => request<Tx>(`/api/transactions/${encodeURIComponent(hash)}`),
   },
 };

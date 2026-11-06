@@ -1,7 +1,14 @@
-// Package chain defines the chain-agnostic read interface the marketplace is
-// built on. Concrete blockchains (TON today) implement Client in sub-packages;
-// the domain and indexer only ever see these plain types, so adding another
-// chain means adding another adapter, not touching business logic.
+// Package chain defines the read interface the marketplace is built on.
+// Concrete blockchains (TON today) implement Client and AddressCodec in
+// sub-packages; the domain and HTTP layers only see these plain types.
+//
+// Scope of the abstraction: reads of collections, items, accounts and raw
+// transactions are chain-agnostic. Interpreting what a transaction *means*
+// (TEP-62 transfer / ownership_assigned op codes, mint fan-out) still lives in
+// internal/indexer, so a second chain would need either TEP-compatible message
+// semantics or a higher-level adapter method such as
+// GetItemTransfers(ctx, item, afterLT, limit) returning ownership changes,
+// which is where that logic would move.
 package chain
 
 import (
@@ -12,6 +19,17 @@ import (
 
 // ErrNotFound is returned when the account/entity does not exist on chain.
 var ErrNotFound = errors.New("chain: not found")
+
+// AddressCodec converts between the canonical raw address used as a storage
+// key and the chain's user-facing representation. Transport layers depend on
+// this instead of on a concrete chain package.
+type AddressCodec interface {
+	// Normalize accepts any address form and returns the canonical raw form.
+	Normalize(s string) (string, error)
+	// Friendly renders a raw address for display / wallets. bounceable is
+	// true for contracts and false for wallets.
+	Friendly(raw string, bounceable bool) string
+}
 
 // Collection is an NFT collection as seen on chain.
 type Collection struct {

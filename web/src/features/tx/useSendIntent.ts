@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { useTonConnectUI } from '@tonconnect/ui-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/endpoints';
+import { keys } from '@/api/queryKeys';
 import type { Intent, RegisterTxBody, Tx } from '@/lib/types';
 import { useToast } from '@/components/Toast';
 
@@ -35,18 +36,13 @@ export function useSendIntent() {
         setState((s) => ({ ...s, step: 'wallet' }));
         const result = await tonConnectUI.sendTransaction({
           validUntil: intent.valid_until,
-          messages: intent.messages.map((m) => ({
-            address: m.address,
-            amount: m.amount,
-            payload: m.payload,
-            stateInit: m.stateInit,
-          })),
+          messages: intent.messages.map((m) => ({ address: m.address, amount: m.amount, payload: m.payload })),
         });
         setState((s) => ({ ...s, step: 'registering' }));
-        const tx = await api.tx.register(register(intent, result.boc));
+        const tx = await api.transactions.register(register(intent, result.boc));
         setState({ step: 'tracking', tx, error: null });
-        void qc.invalidateQueries({ queryKey: ['listings'] });
-        void qc.invalidateQueries({ queryKey: ['users'] });
+        void qc.invalidateQueries({ queryKey: keys.listingsRoot });
+        void qc.invalidateQueries({ queryKey: keys.usersRoot });
         return tx;
       } catch (err) {
         const message = describeError(err);

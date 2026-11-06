@@ -12,7 +12,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"tonnet/internal/auth"
-	"tonnet/internal/chain/ton"
 	"tonnet/internal/domain"
 )
 
@@ -26,13 +25,13 @@ func itoa(v int64) string { return strconv.FormatInt(v, 10) }
 // rawAddr normalises a path/body address or returns a 400-able error. Path
 // params arrive percent-encoded (chi does not unescape them), so "0%3Aabc"
 // must become "0:abc" before parsing.
-func rawAddr(s string) (string, error) {
-	if unescaped, err := url.PathUnescape(s); err == nil {
-		s = unescaped
+func (s *Server) rawAddr(in string) (string, error) {
+	if unescaped, err := url.PathUnescape(in); err == nil {
+		in = unescaped
 	}
-	raw, err := ton.NormalizeRaw(s)
+	raw, err := s.deps.Addrs.Normalize(in)
 	if err != nil {
-		return "", fmt.Errorf("%w: invalid address %q", errBadRequest, s)
+		return "", fmt.Errorf("%w: invalid address %q", errBadRequest, in)
 	}
 	return raw, nil
 }
@@ -52,37 +51,59 @@ func pageFrom(r *http.Request) domain.Page {
 // collections table is tiny (tracked collections only), so one query per
 // request is cheaper than a join on every item query.
 func (s *Server) names(r *http.Request) collectionNames {
-	cs, err := s.deps.Catalog.Collections(r.Context())
+	out, err := s.deps.Catalog.CollectionNames(r.Context())
 	if err != nil {
 		return nil
-	}
-	out := make(collectionNames, len(cs))
-	for _, c := range cs {
-		out[c.Address] = c.Name
 	}
 	return out
 }
 
-func itemSortFrom(r *http.Request) domain.ItemSort {
-	switch strings.ToLower(r.URL.Query().Get("sort")) {
-	case "price", "price_asc":
-		return domain.SortByPriceAsc
-	case "price_desc":
-		return domain.SortByPriceDesc
+// itemSortFrom parses ?sort= for item pages; unknown values are a 400 so a
+// typo never silently falls back to the default order.
+func itemSortFrom(r *http.Request) (domain.ItemSort, error) {
+	switch v := strings.ToLower(r.URL.Query().Get("sort")); v {
+	case "", string(domain.SortByIndex):
+		return domain.SortByIndex, nil
+	case string(domain.SortByPriceAsc):
+		return domain.SortByPriceAsc, nil
+	case string(domain.SortByPriceDesc):
+		return domain.SortByPriceDesc, nil
 	default:
-		return domain.SortByIndex
+		return "", fmt.Errorf("%w: unknown sort %q (index|price_asc|price_desc)", errBadRequest, v)
 	}
 }
 
-func listingSortFrom(r *http.Request) domain.ListingSort {
-	switch strings.ToLower(r.URL.Query().Get("sort")) {
-	case "price", "price_asc":
-		return domain.ListingSortPriceAsc
-	case "price_desc":
-		return domain.ListingSortPriceDesc
+// listingSortFrom parses ?sort= for listing pages (see itemSortFrom).
+func listingSortFrom(r *http.Request) (domain.ListingSort, error) {
+	switch v := strings.ToLower(r.URL.Query().Get("sort")); v {
+	case "", string(domain.ListingSortNewest):
+		return domain.ListingSortNewest, nil
+	case string(domain.ListingSortPriceAsc):
+		return domain.ListingSortPriceAsc, nil
+	case string(domain.ListingSortPriceDesc):
+		return domain.ListingSortPriceDesc, nil
 	default:
-		return domain.ListingSortNewest
+		return "", fmt.Errorf("%w: unknown sort %q (newest|price_asc|price_desc)", errBadRequest, v)
 	}
+}
+
+// tonConnectChainIDs maps TON Connect CHAIN values to network names.
+var tonConnectChainIDs = map[string]string{"-239": "mainnet", "-3": "testnet"}
+
+// checkNetwork rejects proofs produced on a different network than the one
+// this API serves; an empty value is accepted for clients that omit it.
+func (s *Server) checkNetwork(network string) error {
+	if network == "" || s.deps.Network == "" {
+		return nil
+	}
+	name, ok := tonConnectChainIDs[network]
+	if !ok {
+		name = strings.ToLower(network)
+	}
+	if name != strings.ToLower(s.deps.Network) {
+		return fmt.Errorf("%w: wallet is on %s, this API serves %s", auth.ErrInvalidProof, name, s.deps.Network)
+	}
+	return nil
 }
 
 func decodeBody(r *http.Request, v any) error {
@@ -138,6 +159,10 @@ func (s *Server) authVerify(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	if err := s.checkNetwork(req.Network); err != nil {
+		writeError(w, r, err)
+		return
+	}
 	stateInit := req.StateInit
 	if stateInit == "" {
 		stateInit = req.Proof.StateInit
@@ -158,7 +183,7 @@ func (s *Server) authVerify(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"token": token, "expires_at": exp.Unix(), "address": s.fmt.wallet(raw)})
+	writeJSON(w, http.StatusOK, map[string]any{"token": token, "expires_at": exp.Unix(), "address": s.render.wallet(raw)})
 }
 
 func (s *Server) authMe(w http.ResponseWriter, r *http.Request) {
@@ -167,26 +192,27 @@ func (s *Server) authMe(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"address": s.fmt.wallet(addr)})
+	writeJSON(w, http.StatusOK, map[string]any{"address": s.render.wallet(addr)})
 }
 
 // ---- catalog ----
 
 func (s *Server) listCollections(w http.ResponseWriter, r *http.Request) {
-	cs, err := s.deps.Catalog.Collections(r.Context())
+	page := pageFrom(r)
+	cs, total, err := s.deps.Catalog.Collections(r.Context(), page)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
 	out := make([]collectionDTO, 0, len(cs))
 	for _, c := range cs {
-		out = append(out, s.fmt.collection(c))
+		out = append(out, s.render.collection(c))
 	}
-	writeJSON(w, http.StatusOK, pageDTO[collectionDTO]{Items: out, Page: 1, Limit: max(len(out), 1), Total: len(out)})
+	writeJSON(w, http.StatusOK, newPage(out, page, total))
 }
 
 func (s *Server) getCollection(w http.ResponseWriter, r *http.Request) {
-	raw, err := rawAddr(chi.URLParam(r, "addr"))
+	raw, err := s.rawAddr(chi.URLParam(r, "addr"))
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -196,26 +222,31 @@ func (s *Server) getCollection(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.fmt.collection(*c))
+	writeJSON(w, http.StatusOK, s.render.collection(*c))
 }
 
 func (s *Server) listCollectionItems(w http.ResponseWriter, r *http.Request) {
-	raw, err := rawAddr(chi.URLParam(r, "addr"))
+	raw, err := s.rawAddr(chi.URLParam(r, "addr"))
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	sort, err := itemSortFrom(r)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
 	page := pageFrom(r)
-	items, total, err := s.deps.Catalog.CollectionItems(r.Context(), raw, itemSortFrom(r), page)
+	items, total, err := s.deps.Catalog.CollectionItems(r.Context(), raw, sort, page)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, newPage(s.fmt.items(items, s.names(r)), page, total))
+	writeJSON(w, http.StatusOK, newPage(s.render.items(items, s.names(r)), page, total))
 }
 
 func (s *Server) getItem(w http.ResponseWriter, r *http.Request) {
-	raw, err := rawAddr(chi.URLParam(r, "addr"))
+	raw, err := s.rawAddr(chi.URLParam(r, "addr"))
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -225,26 +256,26 @@ func (s *Server) getItem(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	out := itemDetailDTO{Item: s.fmt.item(domain.ItemWithListing{Item: d.Item, Listing: d.Listing}, s.names(r)), Transactions: make([]txDTO, 0, len(d.History))}
+	out := itemDetailDTO{Item: s.render.item(domain.ItemWithListing{Item: d.Item, Listing: d.Listing}, s.names(r)), Transactions: make([]txDTO, 0, len(d.History))}
 	for _, t := range d.History {
-		out.Transactions = append(out.Transactions, s.fmt.tx(t))
+		out.Transactions = append(out.Transactions, s.render.tx(t))
 	}
 	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) listUserItems(w http.ResponseWriter, r *http.Request) {
-	raw, err := rawAddr(chi.URLParam(r, "addr"))
+	raw, err := s.rawAddr(chi.URLParam(r, "addr"))
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	items, err := s.deps.Catalog.UserItems(r.Context(), raw)
+	page := pageFrom(r)
+	items, total, err := s.deps.Catalog.UserItems(r.Context(), raw, page)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	out := s.fmt.items(items, s.names(r))
-	writeJSON(w, http.StatusOK, pageDTO[itemDTO]{Items: out, Page: 1, Limit: max(len(out), 1), Total: len(out)})
+	writeJSON(w, http.StatusOK, newPage(s.render.items(items, s.names(r)), page, total))
 }
 
 func (s *Server) listListings(w http.ResponseWriter, r *http.Request) {
@@ -258,13 +289,18 @@ func (s *Server) listListings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, fmt.Errorf("%w: unknown status %q", errBadRequest, status))
 		return
 	}
-	page := pageFrom(r)
-	items, total, err := s.deps.Catalog.Listings(r.Context(), status, listingSortFrom(r), page)
+	sort, err := listingSortFrom(r)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, newPage(s.fmt.listingsWithItems(items, s.names(r)), page, total))
+	page := pageFrom(r)
+	items, total, err := s.deps.Catalog.Listings(r.Context(), status, sort, page)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, newPage(s.render.listingsWithItems(items, s.names(r)), page, total))
 }
 
 func listingID(r *http.Request) (int64, error) {
@@ -286,7 +322,7 @@ func (s *Server) getListing(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.fmt.listingWithItem(*it, s.names(r)))
+	writeJSON(w, http.StatusOK, s.render.listingWithItem(*it, s.names(r)))
 }
 
 // ---- intents ----
@@ -307,7 +343,7 @@ func (s *Server) listingIntent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	nft, err := rawAddr(req.NFTAddress)
+	nft, err := s.rawAddr(req.NFTAddress)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -322,7 +358,7 @@ func (s *Server) listingIntent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, s.fmt.intent(*res))
+	writeJSON(w, http.StatusCreated, s.render.intent(*res))
 }
 
 func (s *Server) buyIntent(w http.ResponseWriter, r *http.Request) {
@@ -341,7 +377,7 @@ func (s *Server) buyIntent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.fmt.intent(*res))
+	writeJSON(w, http.StatusOK, s.render.intent(*res))
 }
 
 func (s *Server) cancelIntent(w http.ResponseWriter, r *http.Request) {
@@ -360,7 +396,7 @@ func (s *Server) cancelIntent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.fmt.intent(*res))
+	writeJSON(w, http.StatusOK, s.render.intent(*res))
 }
 
 // ---- transactions ----
@@ -385,7 +421,7 @@ func (s *Server) registerTx(w http.ResponseWriter, r *http.Request) {
 	}
 	in := domain.RegisterInput{Sender: sender, BOC: req.BOC, Type: domain.TxType(strings.ToLower(req.Type)), ListingID: req.ListingID}
 	if req.NFTAddress != "" {
-		if in.NFTAddress, err = rawAddr(req.NFTAddress); err != nil {
+		if in.NFTAddress, err = s.rawAddr(req.NFTAddress); err != nil {
 			writeError(w, r, err)
 			return
 		}
@@ -395,7 +431,7 @@ func (s *Server) registerTx(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusAccepted, s.fmt.tx(*tx))
+	writeJSON(w, http.StatusAccepted, s.render.tx(*tx))
 }
 
 func (s *Server) getTx(w http.ResponseWriter, r *http.Request) {
@@ -409,5 +445,5 @@ func (s *Server) getTx(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.fmt.tx(*tx))
+	writeJSON(w, http.StatusOK, s.render.tx(*tx))
 }

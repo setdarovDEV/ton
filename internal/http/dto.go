@@ -2,9 +2,10 @@ package http
 
 import (
 	"encoding/json"
+	"strconv"
 	"time"
 
-	"tonnet/internal/chain/ton"
+	"tonnet/internal/chain"
 	"tonnet/internal/domain"
 )
 
@@ -15,21 +16,22 @@ type Addr struct {
 	Raw     string `json:"raw"`
 }
 
-// addrFormatter knows the network (testnet flag) for user-friendly rendering.
-type addrFormatter struct{ testnet bool }
+// addrFormatter renders addresses through the injected chain codec, so the
+// transport layer never depends on a concrete chain package.
+type addrFormatter struct{ codec chain.AddressCodec }
 
 func (f addrFormatter) wallet(raw string) *Addr {
 	if raw == "" {
 		return nil
 	}
-	return &Addr{Address: ton.ToFriendly(raw, f.testnet, false), Raw: raw}
+	return &Addr{Address: f.codec.Friendly(raw, false), Raw: raw}
 }
 
 func (f addrFormatter) contract(raw string) *Addr {
 	if raw == "" {
 		return nil
 	}
-	return &Addr{Address: ton.ToFriendly(raw, f.testnet, true), Raw: raw}
+	return &Addr{Address: f.codec.Friendly(raw, true), Raw: raw}
 }
 
 type collectionDTO struct {
@@ -95,7 +97,7 @@ type txDTO struct {
 	From       *Addr      `json:"from"`
 	To         *Addr      `json:"to"`
 	AmountNano string     `json:"amount_nano"`
-	LT         uint64     `json:"lt"`
+	LT         string     `json:"lt"` // uint64 exceeds JS safe integers; sent as decimal string
 	Status     string     `json:"status"`
 	ExpiresAt  *time.Time `json:"expires_at"`
 	SeenAt     time.Time  `json:"seen_at"`
@@ -194,7 +196,7 @@ func (f addrFormatter) listingsWithItems(in []domain.ItemWithListing, names coll
 
 func (f addrFormatter) tx(t domain.Transaction) txDTO {
 	return txDTO{Hash: t.Hash, Type: string(t.Type), NFTAddress: f.contract(t.NFTAddress), ListingID: t.ListingID, From: f.wallet(t.From), To: f.wallet(t.To),
-		AmountNano: itoa(t.AmountNano), LT: t.LT, Status: string(t.Status), ExpiresAt: t.ExpiresAt, SeenAt: t.SeenAt, UpdatedAt: t.UpdatedAt}
+		AmountNano: itoa(t.AmountNano), LT: strconv.FormatUint(t.LT, 10), Status: string(t.Status), ExpiresAt: t.ExpiresAt, SeenAt: t.SeenAt, UpdatedAt: t.UpdatedAt}
 }
 
 func (f addrFormatter) intent(r domain.IntentResult) intentDTO {

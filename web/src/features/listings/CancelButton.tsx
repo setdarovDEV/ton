@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api } from '@/api/endpoints';
 import type { Listing } from '@/lib/types';
+import { sameRaw } from '@/lib/format';
 import { Button } from '@/components/ui';
 import { Modal } from '@/components/Modal';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -13,7 +14,7 @@ export function CancelButton({ listing, className = '' }: { listing: Listing; cl
   const flow = useSendIntent();
   const [open, setOpen] = useState(false);
 
-  const isSeller = rawAddress && rawAddress.toLowerCase() === listing.seller.raw.toLowerCase();
+  const isSeller = sameRaw(rawAddress, listing.seller.raw);
   if (listing.status !== 'active' || !isSeller || !isVerified) return null;
 
   const start = async () => {
@@ -35,7 +36,7 @@ export function CancelButton({ listing, className = '' }: { listing: Listing; cl
         Cancel listing
       </Button>
       <Modal open={open} onClose={close} title="Cancelling listing">
-        <p className="mb-4 text-sm text-zinc-400">The sale contract will transfer the NFT back to your wallet (~0.1 TON gas).</p>
+        <p className="mb-4 text-sm text-zinc-400">The sale contract will transfer the NFT back to your wallet (~0.12 TON gas, unused part refunded).</p>
         <TxTracker step={flow.step} tx={flow.tx} error={flow.error} />
         <div className="mt-4 flex justify-end">
           <Button variant="secondary" onClick={close}>

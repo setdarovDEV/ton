@@ -12,6 +12,10 @@ import (
 	"tonnet/internal/domain"
 )
 
+// openStatuses is the SQL form of the non-terminal listing statuses
+// (domain.ListingStatus.IsTerminal); keep the two in sync.
+const openStatuses = `('pending','active')`
+
 const listingCols = `id, nft_address, sale_contract, seller, COALESCE(buyer,''), price_nano, status, created_at, updated_at`
 
 func scanListing(row pgx.Row) (*domain.Listing, error) {
@@ -68,7 +72,7 @@ func (s *Store) GetOpenListingByNFT(ctx context.Context, nft string) (*domain.Li
 	ctx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
 	l, err := scanListing(s.pool.QueryRow(ctx, `SELECT `+listingCols+` FROM listings
-		WHERE nft_address = $1 AND status IN ('pending','active') ORDER BY created_at DESC LIMIT 1`, nft))
+		WHERE nft_address = $1 AND status IN `+openStatuses+` ORDER BY created_at DESC LIMIT 1`, nft))
 	if err != nil {
 		return nil, fmt.Errorf("get open listing for %s: %w", nft, mapErr(err))
 	}
@@ -136,7 +140,7 @@ func (s *Store) queryListings(ctx context.Context, sql string, args ...any) ([]d
 func (s *Store) ListOpenListingsBySeller(ctx context.Context, seller string) ([]domain.Listing, error) {
 	ctx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
-	ls, err := s.queryListings(ctx, `SELECT `+listingCols+` FROM listings WHERE seller = $1 AND status IN ('pending','active')`, seller)
+	ls, err := s.queryListings(ctx, `SELECT `+listingCols+` FROM listings WHERE seller = $1 AND status IN `+openStatuses+``, seller)
 	if err != nil {
 		return nil, fmt.Errorf("list seller listings: %w", err)
 	}
@@ -147,15 +151,15 @@ func (s *Store) ListOpenListingsBySeller(ctx context.Context, seller string) ([]
 func (s *Store) ListOpenListings(ctx context.Context) ([]domain.Listing, error) {
 	ctx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
-	ls, err := s.queryListings(ctx, `SELECT `+listingCols+` FROM listings WHERE status IN ('pending','active')`)
+	ls, err := s.queryListings(ctx, `SELECT `+listingCols+` FROM listings WHERE status IN `+openStatuses+``)
 	if err != nil {
 		return nil, fmt.Errorf("list open listings: %w", err)
 	}
 	return ls, nil
 }
 
-// UpdateListingStatus implements domain.ListingRepository and publishes a
-// listing.updated event in the same transaction.
+// UpdateListingStatus implements domain.ListingRepository: the status change
+// and the listing.updated notification are committed in one transaction.
 func (s *Store) UpdateListingStatus(ctx context.Context, id int64, status domain.ListingStatus, buyer string) error {
 	ctx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
 	defer cancel()
@@ -170,7 +174,7 @@ func (s *Store) UpdateListingStatus(ctx context.Context, id int64, status domain
 	if err != nil {
 		return fmt.Errorf("update listing %d: %w", id, mapErr(err))
 	}
-	if err := notify(ctx, tx, domain.Event{Type: "listing.updated", NFTAddress: nft, ListingID: id, Status: string(status), At: time.Now()}); err != nil {
+	if err := notify(ctx, tx, domain.Event{Type: domain.EventListingUpdated, NFTAddress: nft, ListingID: id, Status: string(status), At: time.Now()}); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

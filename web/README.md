@@ -13,7 +13,7 @@ Pages: Explore (`/`), Collections (`/collections`, `/collections/:addr`), Item (
 
 Flows: ton_proof login → JWT (`features/auth`), list / buy / cancel via backend-built intents signed with
 TON Connect `sendTransaction` (`features/listings`, `features/tx/useSendIntent`), tx tracking by polling
-`GET /api/tx/:hash` with optional WebSocket invalidation (`features/tx`).
+`GET /api/transactions/:hash` with optional WebSocket invalidation (`features/tx`).
 
 `public/tonconnect-manifest.json` and `public/metadata/*` contain the placeholder domain
 `https://tonnet.example.com` — replace it before deploying (see `public/metadata/README.md`).

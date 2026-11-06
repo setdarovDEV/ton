@@ -11,6 +11,8 @@ export const SaleOps = {
 
 /** Minimum gas the sale contract demands on top of the price (min_gas_amount in the FunC source). */
 export const SALE_MIN_GAS = toNano('0.1');
+/** Gas attached to a cancel: min gas plus a margin; mirrors CancelGasNano in internal/chain/ton/payload.go. */
+export const CANCEL_GAS = toNano('0.12');
 
 export type NftFixpriceSaleV3R3Config = {
     marketplace: Address;
@@ -121,7 +123,7 @@ export class NftFixpriceSaleV3R3 implements Contract {
 
     async sendCancel(provider: ContractProvider, via: Sender, opts: { queryId?: number | bigint } = {}): Promise<void> {
         await provider.internal(via, {
-            value: SALE_MIN_GAS,
+            value: CANCEL_GAS,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: buildCancelBody(opts.queryId ?? 0),
         });
