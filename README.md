@@ -1,6 +1,6 @@
 # tonnet — TON NFT Marketplace (demo)
 
-[![CI](https://github.com/OWNER/tonnet/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/tonnet/actions/workflows/ci.yml)
+[![CI](https://github.com/setdarovDEV/tonnet/actions/workflows/ci.yml/badge.svg)](https://github.com/setdarovDEV/tonnet/actions/workflows/ci.yml)
 
 A small, complete, working vertical slice of a Getgems-style, TON-first NFT marketplace on **testnet**:
 **wallet login (TON Connect 2 + `ton_proof`) → collection indexing → fixed-price listing → buy → on-chain confirmation**.
@@ -41,16 +41,91 @@ flowchart LR
 
 Full diagrams and the module map: [docs/architecture.md](docs/architecture.md).
 
-## Quick start (local, one command)
+## How to run
+
+### Prerequisites
+
+- Docker 24+ with the Compose plugin (that is all you need for the default path)
+- For development without Docker: Go 1.25+, Node.js 22+, PostgreSQL 16
+
+### 1. Run everything with Docker Compose
 
 ```bash
-cp .env.example .env            # fill COLLECTIONS, MARKETPLACE_*, TONAPI_KEY (see "Contracts" below)
-docker compose up --build       # postgres + api + indexer + web
-open http://localhost:3000
+git clone https://github.com/setdarovDEV/tonnet.git
+cd tonnet
+cp .env.example .env
 ```
 
-Without contract addresses the stack still boots; `COLLECTIONS` may point at any testnet TEP-62 collection
-to see indexing work. Dev mode: `go run ./cmd/api`, `go run ./cmd/indexer`, `cd web && npm run dev`.
+Open `.env` and set at least these values:
+
+| Variable | What to put |
+|---|---|
+| `JWT_SECRET` | any random string, 16+ characters |
+| `MARKETPLACE_ADDRESS` | the marketplace contract address (see step 3). For read-only browsing before you deploy, any testnet address works |
+| `MARKETPLACE_PRIVATE_KEY` | 32-byte hex seed printed by `deploy:marketplace`. For read-only browsing: `openssl rand -hex 32` |
+| `COLLECTIONS` | comma-separated collection addresses to index (your own from step 3, or any testnet TEP-62 collection, e.g. `0:bc0c37a1079f0d19c0ee3afc363437f1c33aae6eb6ec1466c424deeac5194a90`) |
+| `TONAPI_KEY` | optional; get one at <https://tonconsole.com>. Without it tonapi allows ~1 request/second |
+
+Then start the stack:
+
+```bash
+docker compose up --build
+```
+
+Open <http://localhost:3000>. Services:
+
+| Service | Port | Role |
+|---|---|---|
+| `web` | 3000 | React SPA served by nginx; proxies `/api` and `/ws` to the API |
+| `api` | 8080 (`API_PORT`) | REST + WebSocket, read-only on the DB |
+| `indexer` | — | polls TON testnet, writes the DB |
+| `postgres` | 5432 (`POSTGRES_PORT`) | PostgreSQL 16 |
+
+If port 8080 is already used on your machine, set `API_PORT=18080` in `.env`; the web container talks to the API internally, so nothing else changes.
+
+Check it works:
+
+```bash
+curl http://localhost:3000/healthz
+curl http://localhost:3000/api/collections
+docker compose logs -f indexer     # "owner change" lines appear as items are indexed
+```
+
+Stop with `docker compose down` (add `-v` to drop the database volume).
+
+### 2. Use the marketplace
+
+1. Install Tonkeeper (or MyTonWallet) and switch it to **testnet**; get test TON from [@testgiver_ton_bot](https://t.me/testgiver_ton_bot).
+2. Click **Connect Wallet** in the header. The wallet signs a `ton_proof`; the backend verifies it and issues a JWT (green check next to the button).
+3. **My NFTs** shows what the connected wallet owns. Press **Sell**, enter a price, confirm the transaction in the wallet (two messages: deploy sale contract + transfer NFT to it). The listing shows `pending` until the indexer sees the NFT owned by the sale contract, then `active`.
+4. **Explore** lists active sales. Press **Buy** with another wallet: you pay `price + 0.15 TON`; unused gas is refunded by the contract. The status goes `pending → confirmed` and the NFT appears in the buyer's My NFTs.
+5. The seller can press **Cancel** on an active listing to get the NFT back.
+
+Note: wallets require the TON Connect manifest to be served over HTTPS, so connecting a wallet works on a deployed domain (see `docs/deploy.md`), not on plain `http://localhost`. Browsing, indexing and the API work locally without a wallet.
+
+### 3. Deploy the contracts to testnet (once)
+
+```bash
+cd contracts
+npm install
+npm run build                    # compiles the FunC sources with Blueprint
+npm run deploy:marketplace       # prints MARKETPLACE_ADDRESS and MARKETPLACE_PRIVATE_KEY
+METADATA_BASE_URL=https://your-domain.com npm run deploy:collection   # prints COLLECTIONS=...
+```
+
+Both scripts ask you to confirm the transaction through TON Connect (scan the QR with a testnet wallet that has a few TON). Put the printed values into `.env` and restart: `docker compose up --build -d`.
+
+### 4. Development mode (without Docker)
+
+```bash
+docker compose up -d postgres                      # or any local PostgreSQL 16
+export DATABASE_URL=postgres://tonnet:tonnet@localhost:5432/tonnet?sslmode=disable
+go run ./cmd/api                                   # http://localhost:8080, runs migrations on start
+go run ./cmd/indexer                               # separate process
+cd web && npm install && npm run dev               # http://localhost:5173, proxies /api to :8080
+```
+
+Useful targets: `make test`, `make test-integration` (testcontainers), `make lint`; `cd contracts && npm test` (Sandbox tests).
 
 ## Contracts (standard Getgems, deployed with Blueprint)
 
