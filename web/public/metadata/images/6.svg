@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fb7185"/><stop offset="1" stop-color="#f43f5e"/></linearGradient>
+    <radialGradient id="bg" cx="0.5" cy="0.4" r="0.8"><stop offset="0" stop-color="#1c2230"/><stop offset="1" stop-color="#0b0e14"/></radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <g stroke="#fb7185" stroke-opacity="0.15" stroke-width="1"><line x1="0" y1="64" x2="512" y2="64"/><line x1="64" y1="0" x2="64" y2="512"/><line x1="0" y1="128" x2="512" y2="128"/><line x1="128" y1="0" x2="128" y2="512"/><line x1="0" y1="192" x2="512" y2="192"/><line x1="192" y1="0" x2="192" y2="512"/><line x1="0" y1="256" x2="512" y2="256"/><line x1="256" y1="0" x2="256" y2="512"/><line x1="0" y1="320" x2="512" y2="320"/><line x1="320" y1="0" x2="320" y2="512"/><line x1="0" y1="384" x2="512" y2="384"/><line x1="384" y1="0" x2="384" y2="512"/><line x1="0" y1="448" x2="512" y2="448"/><line x1="448" y1="0" x2="448" y2="512"/></g>
+  <polygon points="256.0,106.0 352.4,141.1 403.7,230.0 385.9,331.0 307.3,397.0 204.7,397.0 126.1,331.0 108.3,230.0 159.6,141.1" fill="url(#g)" opacity="0.95"/>
+  <polygon points="256.0,106.0 352.4,141.1 403.7,230.0 385.9,331.0 307.3,397.0 204.7,397.0 126.1,331.0 108.3,230.0 159.6,141.1" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="3" transform="rotate(78 256 256) scale(0.7) translate(110 110)"/>
+  <circle cx="256" cy="256" r="28" fill="#0b0e14" opacity="0.85"/>
+  <text x="256" y="266" text-anchor="middle" font-family="ui-monospace, monospace" font-size="26" fill="#ffffff">6</text>
+</svg>

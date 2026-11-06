@@ -1,0 +1,10 @@
+{
+  "name": "Azure Prism #1",
+  "description": "TONNET Genesis piece 1 — a 4-sided generative form. Minted on TON testnet with the standard Getgems nft-item contract.",
+  "image": "https://tonnet.example.com/metadata/images/1.svg",
+  "attributes": [
+    { "trait_type": "Rarity", "value": "Common" },
+    { "trait_type": "Sides", "value": "4" },
+    { "trait_type": "Palette", "value": "#38bdf8 → #6366f1" }
+  ]
+}

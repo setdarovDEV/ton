@@ -1,0 +1,9 @@
+{
+  "name": "TONNET Genesis",
+  "description": "Demo TEP-62 collection for the TONNET marketplace vertical slice: 8 generative geometric pieces on TON testnet.",
+  "image": "https://tonnet.example.com/metadata/images/collection.svg",
+  "cover_image": "https://tonnet.example.com/metadata/images/cover.svg",
+  "external_url": "https://tonnet.example.com",
+  "marketplace": "tonnet.example.com",
+  "social_links": []
+}

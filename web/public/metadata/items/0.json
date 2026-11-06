@@ -1,0 +1,10 @@
+{
+  "name": " #0",
+  "description": "TONNET Genesis piece 0 — a 3-sided generative form. Minted on TON testnet with the standard Getgems nft-item contract.",
+  "image": "https://tonnet.example.com/metadata/images/0.svg",
+  "attributes": [
+    { "trait_type": "Rarity", "value": "" },
+    { "trait_type": "Sides", "value": "3" },
+    { "trait_type": "Palette", "value": " → " }
+  ]
+}

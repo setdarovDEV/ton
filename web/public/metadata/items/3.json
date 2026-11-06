@@ -1,0 +1,10 @@
+{
+  "name": "Verdant Orbit #3",
+  "description": "TONNET Genesis piece 3 — a 6-sided generative form. Minted on TON testnet with the standard Getgems nft-item contract.",
+  "image": "https://tonnet.example.com/metadata/images/3.svg",
+  "attributes": [
+    { "trait_type": "Rarity", "value": "Rare" },
+    { "trait_type": "Sides", "value": "6" },
+    { "trait_type": "Palette", "value": "#22c55e → #14b8a6" }
+  ]
+}

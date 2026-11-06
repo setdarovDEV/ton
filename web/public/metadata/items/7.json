@@ -1,0 +1,10 @@
+{
+  "name": "Ice Facet #7",
+  "description": "TONNET Genesis piece 7 — a 10-sided generative form. Minted on TON testnet with the standard Getgems nft-item contract.",
+  "image": "https://tonnet.example.com/metadata/images/7.svg",
+  "attributes": [
+    { "trait_type": "Rarity", "value": "Uncommon" },
+    { "trait_type": "Sides", "value": "10" },
+    { "trait_type": "Palette", "value": "#67e8f9 → #e0f2fe" }
+  ]
+}

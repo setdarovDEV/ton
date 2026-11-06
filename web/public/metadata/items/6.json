@@ -1,0 +1,10 @@
+{
+  "name": "Coral Grid #6",
+  "description": "TONNET Genesis piece 6 — a 9-sided generative form. Minted on TON testnet with the standard Getgems nft-item contract.",
+  "image": "https://tonnet.example.com/metadata/images/6.svg",
+  "attributes": [
+    { "trait_type": "Rarity", "value": "Common" },
+    { "trait_type": "Sides", "value": "9" },
+    { "trait_type": "Palette", "value": "#fb7185 → #f43f5e" }
+  ]
+}

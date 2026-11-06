@@ -1,0 +1,10 @@
+{
+  "name": "Ember Lattice #2",
+  "description": "TONNET Genesis piece 2 — a 5-sided generative form. Minted on TON testnet with the standard Getgems nft-item contract.",
+  "image": "https://tonnet.example.com/metadata/images/2.svg",
+  "attributes": [
+    { "trait_type": "Rarity", "value": "Uncommon" },
+    { "trait_type": "Sides", "value": "5" },
+    { "trait_type": "Palette", "value": "#f97316 → #ef4444" }
+  ]
+}

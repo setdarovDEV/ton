@@ -1,0 +1,10 @@
+{
+  "name": "Golden Helix #5",
+  "description": "TONNET Genesis piece 5 — a 8-sided generative form. Minted on TON testnet with the standard Getgems nft-item contract.",
+  "image": "https://tonnet.example.com/metadata/images/5.svg",
+  "attributes": [
+    { "trait_type": "Rarity", "value": "Epic" },
+    { "trait_type": "Sides", "value": "8" },
+    { "trait_type": "Palette", "value": "#facc15 → #f59e0b" }
+  ]
+}
